@@ -35,6 +35,21 @@ class MultiBoxMetric(mx.metric.EvalMetric):
         if getattr(self, 'num', None) is None:
             self.num_inst = 0
             self.sum_metric = 0.0
+            self.global_num_inst = 0
+            self.global_sum_metric = 0.0
+        else:
+            self.num_inst = [0] * self.num
+            self.sum_metric = [0.0] * self.num
+            self.global_num_inst = [0] * self.num
+            self.global_sum_metric = [0.0] * self.num
+
+    def reset_local(self):
+        """
+        override reset_local behavior
+        """
+        if getattr(self, 'num', None) is None:
+            self.num_inst = 0
+            self.sum_metric = 0.0
         else:
             self.num_inst = [0] * self.num
             self.sum_metric = [0.0] * self.num
