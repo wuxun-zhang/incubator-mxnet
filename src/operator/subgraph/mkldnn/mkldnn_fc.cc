@@ -115,7 +115,7 @@ void SgMKLDNNFCOp::Forward(const OpContext &ctx,
   NDArray output = out_data[fullc::kOut];
 
   mkldnn::memory::desc out_md = GetMemDesc(output);
-  MKLDNNFCFlattenData(default_param, out_data[fullc::kOut], &data, &out_md);
+  MKLDNNFCFlattenData(default_param, out_data[fullc::kOut], &data, &weight, &out_md);
 
   if (initialized_ && mkldnn_param.quantized) {
     if (cached_min_data_ != min_data || cached_max_data_ != max_data ||

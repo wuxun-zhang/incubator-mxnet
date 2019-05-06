@@ -85,7 +85,7 @@ void MKLDNNQuantizedFullyConnectedForward(const nnvm::NodeAttrs &attrs,
 
   bool is_train = false;
   mkldnn::memory::desc out_md = GetMemDesc(out_data[fullc::kOut]);
-  MKLDNNFCFlattenData(param, out_data[fullc::kOut], &data, &out_md);
+  MKLDNNFCFlattenData(param, out_data[fullc::kOut], &data, &weight, &out_md);
   auto &fwd = GetFCFwd(param, is_train, data, weight,
       param.no_bias ? nullptr : &quantized_bias, out_md);
 

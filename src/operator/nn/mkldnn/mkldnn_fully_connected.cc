@@ -207,8 +207,10 @@ MKLDNNFullyConnectedForward &GetFCFwd(
 void MKLDNNFCFlattenData(const FullyConnectedParam &param,
                          const NDArray &out_data,
                          NDArray *in_data,
+                         NDArray *weight,
                          mkldnn::memory::desc *out_md) {
   const mxnet::TShape ishape = in_data->shape();
+  const mxnet::TShape wshape = weight->shape();
   const mxnet::TShape oshape = out_data.shape();
 
   // If the input data is a view of an MKLDNN array, we should create a new
@@ -225,7 +227,11 @@ void MKLDNNFCFlattenData(const FullyConnectedParam &param,
       *out_md = mkldnn::memory::desc(out_dims, get_mkldnn_type(out_data.dtype()),
         mkldnn::memory::format::any);
     } else {
-      *in_data = in_data->MKLDNNDataReshape(Shape2(ishape[0], ishape.ProdShape(1, ishape.ndim())));
+      if(ishape.ndim() != 3){
+        *in_data = in_data->MKLDNNDataReshape(Shape2(ishape[0], ishape.ProdShape(1, ishape.ndim())));
+      }else{
+        *weight = weight->MKLDNNDataReshape(Shape3(wshape[0], ishape[1], ishape[2]));
+      }
       mkldnn::memory::dims out_dims{static_cast<int>(oshape[0]),
         static_cast<int>(oshape.ProdShape(1, oshape.ndim()))};
       *out_md = mkldnn::memory::desc(out_dims, get_mkldnn_type(out_data.dtype()),
@@ -283,18 +289,19 @@ void MKLDNNFCForward(const nnvm::NodeAttrs &attrs, const OpContext &ctx,
   full_param.mkldnn_param.Init(std::unordered_map<std::string, std::string>());
 
   NDArray data = in_data[fullc::kData];
+  NDArray weight = in_data[fullc::kWeight];
   mkldnn::memory::desc out_md = GetMemDesc(out_data[fullc::kOut]);
   MKLDNNFCFlattenData(full_param.default_param, out_data[fullc::kOut],
-                      &data, &out_md);
+                      &data, &weight, &out_md);
   auto &fwd = GetFCFwd(full_param.default_param, ctx.is_train, data,
-                       in_data[fullc::kWeight],
+                       weight,
                        full_param.default_param.no_bias ? nullptr : &in_data[fullc::kBias],
                        out_md);
   std::vector<NDArray> new_inputs;
   if (full_param.default_param.no_bias)
-    new_inputs = {data, in_data[fullc::kWeight]};
+    new_inputs = {data, weight};
   else
-    new_inputs = {data, in_data[fullc::kWeight], in_data[fullc::kBias]};
+    new_inputs = {data, weight, in_data[fullc::kBias]};
   MKLDNNFCForwardFullFeature(full_param, ctx, &fwd, new_inputs, req, out_data);
 }
 
