@@ -504,6 +504,8 @@ def test_quantized_fc():
         if is_test_for_mkldnn():
             check_quantized_fc((32, 512, 2), 100, True, qdtype, flatten=False)
             check_quantized_fc((32, 512, 2), 100, False, qdtype, flatten=False)
+            check_quantized_fc((32, 512, 2), 100, True, qdtype)
+            check_quantized_fc((32, 512, 2), 100, False, qdtype)
             check_quantized_fc((32, 512, 2, 2), 100, True, qdtype, flatten=False)
             check_quantized_fc((32, 512, 2, 2), 100, False, qdtype, flatten=False)
         check_quantized_fc((32, 512, 2, 2), 100, True, qdtype)
