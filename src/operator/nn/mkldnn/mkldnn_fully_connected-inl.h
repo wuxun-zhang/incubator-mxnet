@@ -112,6 +112,7 @@ MKLDNNFullyConnectedForward &GetFCFwd(
 void MKLDNNFCFlattenData(const FullyConnectedParam &param,
                          const NDArray &out_data,
                          NDArray *in_data,
+                         NDArray *weight,
                          mkldnn::memory::desc *out_md);
 
 void MKLDNNFCForward(const nnvm::NodeAttrs &attrs, const OpContext &ctx,
