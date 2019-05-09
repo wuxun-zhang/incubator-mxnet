@@ -401,10 +401,7 @@ def test_fullyconnected():
     def check_fullyconnected_training(stype):
         data_shape = rand_shape_nd(2)
         weight_shape = rand_shape_nd(2)
-        if data_shape.__len__() == 2:
-            weight_shape = (weight_shape[0], data_shape[1])
-        else:
-            weight_shape = (weight_shape[0], data_shape[1]*data_shape[2])
+        weight_shape = (weight_shape[0], data_shape[1])
         for density in [1.0, 0.5, 0.0]:
             x = rand_ndarray(shape=data_shape, stype=stype, density=density)
             w = rand_ndarray(shape=weight_shape, stype=stype, density=density)
@@ -413,28 +410,9 @@ def test_fullyconnected():
             sym = mx.sym.FullyConnected(data=x_sym, weight=w_sym, num_hidden=weight_shape[0], no_bias=True)
             in_location = [x, w]
             check_numeric_gradient(sym, in_location, numeric_eps=1e-3, rtol=1e-3, atol=5e-3)
-
-    def check_fullyconnected_inference(stype):
-        from mxnet.test_utils import simple_forward
-        data_shape = rand_shape_nd(3)
-        weight_shape = rand_shape_nd(2)
-        if data_shape.__len__() == 2:
-            weight_shape = (weight_shape[0], data_shape[1])
-        else:
-            weight_shape = (weight_shape[0], data_shape[1]*data_shape[2])
-        for density in [1.0, 0.5, 0.0]:
-            x = rand_ndarray(shape=data_shape, stype=stype, density=density)
-            w = rand_ndarray(shape=weight_shape, stype=stype, density=density)
-            b = rand_ndarray(shape=(weight_shape[0],), stype=stype, density=density)
-            x_sym = mx.sym.Variable("data")
-            w_sym = mx.sym.Variable("weight")
-            b_sym = mx.sym.Variable("bias")
-            sym = mx.sym.FullyConnected(num_hidden=weight_shape[0], name="FC")
-            out = simple_forward(sym, FC_data=x, FC_weight=w, FC_bias=b)
     stypes = ['row_sparse', 'default']
     for stype in stypes:
         check_fullyconnected_training(stype)
-        check_fullyconnected_inference(stype)
 
 def test_softmax_with_large_inputs():
     def softmax_forward(input_data, true_output):
