@@ -32,6 +32,7 @@
 #include "../mshadow_op.h"
 #include "../mxnet_op.h"
 #include "./quantization_utils.h"
+#include "../nn/mkldnn/mkldnn_base-inl.h"
 
 namespace mxnet {
 namespace op {
@@ -113,6 +114,20 @@ inline bool QuantizedFlattenType(const nnvm::NodeAttrs& attrs,
   TYPE_ASSIGN_CHECK(*out_attrs, 2, mshadow::kFloat32);
   return (*in_attrs)[0] != -1;
 }
+
+#if MXNET_USE_MKLDNN == 1
+static inline bool QuantizedFlattenStorageType(const nnvm::NodeAttrs& attrs,
+                                               const int dev_mask,
+                                               DispatchMode* dispatch_mode,
+                                               std::vector<int> *in_attrs,
+                                               std::vector<int> *out_attrs) {
+  CHECK_EQ(in_attrs->size(), 3U);
+  CHECK_EQ(out_attrs->size(), 3U);
+
+  return MKLDNNStorageType(attrs, dev_mask, true, dispatch_mode, in_attrs,
+                           out_attrs);
+}
+#endif
 
 }  // namespace op
 }  // namespace mxnet

@@ -33,6 +33,9 @@ NNVM_REGISTER_OP(_contrib_quantized_flatten)
 .set_num_outputs(3)
 .set_attr<mxnet::FInferShape>("FInferShape", QuantizedFlattenShape)
 .set_attr<nnvm::FInferType>("FInferType", QuantizedFlattenType)
+#if MXNET_USE_MKLDNN == 1
+.set_attr<FInferStorageType>("FInferStorageType", QuantizedFlattenStorageType)
+#endif
 .set_attr<FCompute>("FCompute<cpu>", QuantizedFlattenCompute<cpu>)
 // TODO(Xinyu): a temp solution to enable GluonCV INT8 flow,
 // will be reverted after the improvement of CachedOP is done.
@@ -49,6 +52,15 @@ NNVM_REGISTER_OP(_contrib_quantized_flatten)
   [](const NodeAttrs& attrs){
     return std::vector<std::pair<int, int> >{{0, 0}, {1, 1}, {2, 2}};
   })
+.set_attr<nnvm::FInplaceIdentity>("FInplaceIdentity", [](const NodeAttrs& attrs){
+  return std::vector<bool>{true, true, true};
+})
+#if MXNET_USE_MKLDNN == 1
+.set_attr<bool>("TIsMKLDNN", true)
+.set_attr<FResourceRequest>("FResourceRequest", [](const NodeAttrs& n) {
+  return std::vector<ResourceRequest>{ResourceRequest::kTempSpace};
+})
+#endif
 .add_argument("data", "NDArray-or-Symbol", "A ndarray/symbol of type `float32`")
 .add_argument("min_data", "NDArray-or-Symbol", "The minimum scalar value "
   "possibly produced for the data")
