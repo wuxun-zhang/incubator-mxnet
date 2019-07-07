@@ -81,6 +81,13 @@ def get_data(img_path):
     img = Image.open(img_path)
     img = np.array(img, dtype=np.float32)
     reshaped_mean = mean.reshape(1, 1, 3)
+    print(img.shape)
+    print(reshaped_mean.shape)
+    np.set_printoptions(threshold=np.inf)
+    print(img)
+    print(np.amax(img))
+    print(np.amin(img))
+    
     img = img - reshaped_mean
     img = np.swapaxes(img, 0, 2)
     img = np.swapaxes(img, 1, 2)
@@ -91,7 +98,9 @@ def main():
     """Module main execution"""
     # Initialization variables - update to change your model and execution context
     model_prefix = "FCN8s_VGG16"
+    # model_prefix = "fcn"
     epoch = 19
+    # epoch = 0
 
     # By default, MXNet will run on the CPU. Change to ctx = mx.gpu() to run on GPU.
     ctx = mx.cpu()
@@ -99,9 +108,11 @@ def main():
     fcnxs, fcnxs_args, fcnxs_auxs = mx.model.load_checkpoint(model_prefix, epoch)
     fcnxs_args["data"] = mx.nd.array(get_data(args.input), ctx)
     data_shape = fcnxs_args["data"].shape
+    print(data_shape)
     label_shape = (1, data_shape[2]*data_shape[3])
     fcnxs_args["softmax_label"] = mx.nd.empty(label_shape, ctx)
-    exector = fcnxs.bind(ctx, fcnxs_args, args_grad=None, grad_req="null", aux_states=fcnxs_args)
+    # exector = fcnxs.bind(ctx, fcnxs_args, args_grad=None, grad_req="null", aux_states=fcnxs_args)
+    exector = fcnxs.bind(ctx=ctx, args=fcnxs_args, args_grad=None, grad_req="null", aux_states=fcnxs_auxs)
     exector.forward(is_train=False)
     output = exector.outputs[0]
     out_img = np.uint8(np.squeeze(output.asnumpy().argmax(axis=1)))
@@ -119,6 +130,6 @@ if __name__ == "__main__":
     parser.add_argument('--output',
                         default='segmented.png',
                         type=make_file_extension_assertion('.png'),
-                        help='The segmentation putput PNG image')
+                        help='The segmentation output PNG image')
     args = parser.parse_args()
     main()
