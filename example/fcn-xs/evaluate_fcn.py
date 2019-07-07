@@ -53,6 +53,7 @@ def parse_args():
                         help='number of workers for data loading')
     parser.add_argument('--pretrained', action='store_true',
                         help='whether to use pretrained model from GluonCV')
+    parser.add_argument('--ngpus', type=int, default=0)
     parser.add_argument('--benchmark', action='store_true',
                         help='using dummy data for inference')
 
@@ -76,7 +77,7 @@ def evaluate(model, input_shape, ctx, num_workers, dataset, logger):
     logger.info("Batch size for inference is %d" % bs)
     # warm up
     dry_run = 0
-    data = [mx.random.uniform(-1.0, 1.0, shape=input_shape, ctx=ctx, dtype='float32')]
+    data = [mx.random.uniform(-1.0, 1.0, shape=input_shape, ctx=ctx[0], dtype='float32')]
     batch = mx.io.DataBatch(data, [])
     for i in range(dry_run):
         outputs = model.forward(batch.data[0])
@@ -91,9 +92,14 @@ def evaluate(model, input_shape, ctx, num_workers, dataset, logger):
     metric.reset()
     tic = time.time()
     for i, (batch, dsts) in enumerate(tbar, 0):
-        targets = mx.gluon.utils.split_and_load(dsts, ctx_list=[ctx], even_split=False)
-        data = batch.as_in_context(ctx)
+        targets = mx.gluon.utils.split_and_load(dsts, ctx_list=ctx, even_split=False)
+        data = batch.as_in_context(ctx[0])
         outputs = model.forward(data)
+        # data = gluon.utils.split_and_load(batch, ctx_list=ctx, batch_axis=0, even_split=False)
+        # outputs = []
+        # for x in data:
+        #     output = model.forward(x)
+        #     outputs.append(output)
         metric.update(targets, outputs)
         pixAcc, mIoU = metric.get()
         tbar.set_description( 'pixAcc: %.4f, mIoU: %.4f' % (pixAcc, mIoU))
@@ -105,7 +111,7 @@ def evaluate(model, input_shape, ctx, num_workers, dataset, logger):
 def benchmark(model, input_shape, ctx, num_batches, logger):
     bs = input_shape[0]
     size = num_batches * bs
-    data = [mx.random.uniform(-1.0, 1.0, shape=input_shape, ctx=ctx, dtype='float32')]
+    data = [mx.random.uniform(-1.0, 1.0, shape=input_shape, ctx=ctx[0], dtype='float32')]
     batch = mx.io.DataBatch(data, [])
 
     # set profiler
@@ -136,7 +142,9 @@ if __name__ == '__main__':
     logger = logging.getLogger('logger')
     logger.setLevel(logging.INFO)
 
-    ctx = mx.cpu(0)
+    ctx = [mx.cpu(0)]
+    ctx = [mx.gpu(i) for i in range(args.ngpus)] if args.ngpus > 0 else ctx
+
     bs = args.batch_size
     CHANNEL_COUNT = 3
     num_batches = args.num_batches

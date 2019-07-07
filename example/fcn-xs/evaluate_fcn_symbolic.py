@@ -50,6 +50,7 @@ def parse_args():
     parser.add_argument('--num-batches', type=int, default=100)
     parser.add_argument('--num-workers', type=int, default=4,
                         help='number of workers for data loading')
+    parser.add_argument('--ngpus', type=int, default=0)
     parser.add_argument('--benchmark', action='store_true',
                         help='using dummy data to benchmark performance')
 
@@ -71,7 +72,7 @@ def evaluate(net, bs, ctx, num_workers, dataset, logger):
 
     # warm up
     dry_run = 5
-    data = [mx.random.uniform(-1.0, 1.0, shape=shape, ctx=ctx, dtype='float32')
+    data = [mx.random.uniform(-1.0, 1.0, shape=shape, ctx=ctx[0], dtype='float32')
                 for _, shape in net.data_shapes]
     batch = mx.io.DataBatch(data, [])
     for i in range(dry_run):
@@ -84,9 +85,10 @@ def evaluate(net, bs, ctx, num_workers, dataset, logger):
     tbar = tqdm(test_data)
     tic = time.time()
     for i, (batch, dsts) in enumerate(tbar):
-        targets = mx.gluon.utils.split_and_load(dsts, ctx_list=[ctx], even_split=False)
-        data = batch.as_in_context(ctx)
-        net.forward(mx.io.DataBatch([data]), is_train=False)
+        targets = mx.gluon.utils.split_and_load(dsts, ctx_list=ctx, even_split=False)
+        data = gluon.utils.split_and_load(batch, ctx_list=ctx, batch_axis=0, even_split=False)
+        # data = batch.as_in_context(ctx[0])
+        net.forward(mx.io.DataBatch(data), is_train=False)
         outputs = net.get_outputs()
         metric.update(targets, outputs)
         pixAcc, mIoU = metric.get()
@@ -95,9 +97,6 @@ def evaluate(net, bs, ctx, num_workers, dataset, logger):
     logger.info('Throughput is %f img/sec' % speed)
 
 def benchmark(net, input_shape, ctx, num_batches, batch_size, logger):
-    if not isinstance(ctx, list):
-        ctx = [ctx]
-
     size = num_batches * batch_size
     data = [mx.random.uniform(-1.0, 1.0, shape=input_shape, ctx=ctx[0], dtype='float32')]
     batch = mx.io.DataBatch(data, [])
@@ -122,7 +121,9 @@ if __name__ == '__main__':
     logger = logging.getLogger('logger')
     logger.setLevel(logging.INFO)
 
-    ctx = mx.cpu(0)
+    ctx = [mx.cpu(0)]
+    ctx = [mx.gpu(i) for i in range(args.ngpus)] if args.ngpus > 0 else ctx
+
     bs = args.batch_size
     CHANNEL_COUNT = 3
     num_batches = args.num_batches
