@@ -29,10 +29,10 @@ from mxnet.gluon.data.vision import transforms
 
 import gluoncv
 from gluoncv.model_zoo.segbase import *
-from gluoncv.model_zoo import get_model
+# from gluoncv.model_zoo import get_model
 from gluoncv.data import get_segmentation_dataset
-from gluoncv.utils.viz import get_color_pallete
-from gluoncv.data.segbase import ms_batchify_fn
+# from gluoncv.utils.viz import get_color_pallete
+# from gluoncv.data.segbase import ms_batchify_fn
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Evaluate FCN model')
@@ -51,8 +51,8 @@ def parse_args():
     parser.add_argument('--num-batches', type=int, default=100)
     parser.add_argument('--num-workers', type=int, default=4,
                         help='number of workers for data loading')
-    parser.add_argument('--pretrained', action='store_true',
-                        help='whether to use pretrained model from GluonCV')
+    parser.add_argument('--pretrained', type=str, default=None,
+                        help='pretrained model parameters')
     parser.add_argument('--ngpus', type=int, default=0)
     parser.add_argument('--benchmark', action='store_true',
                         help='using dummy data for inference')
@@ -84,8 +84,6 @@ def evaluate(model, input_shape, ctx, num_workers, dataset, logger):
         for output in outputs:
             output.wait_to_read()
 
-    # model = get_model('fcn_resnet101_voc_int8', pretrained=True)
-    # model.load_parameters('fcn_resnet101_voc_int8-0000.params', ctx=ctx)
     metric = gluoncv.utils.metrics.SegmentationMetric(testset.num_class)
     tbar = tqdm(test_data)
 
@@ -93,13 +91,13 @@ def evaluate(model, input_shape, ctx, num_workers, dataset, logger):
     tic = time.time()
     for i, (batch, dsts) in enumerate(tbar, 0):
         targets = mx.gluon.utils.split_and_load(dsts, ctx_list=ctx, even_split=False)
-        data = batch.as_in_context(ctx[0])
-        outputs = model.forward(data)
-        # data = gluon.utils.split_and_load(batch, ctx_list=ctx, batch_axis=0, even_split=False)
-        # outputs = []
-        # for x in data:
-        #     output = model.forward(x)
-        #     outputs.append(output)
+        # data = batch.as_in_context(ctx[0])
+        # outputs = model.forward(data)
+        data = gluon.utils.split_and_load(batch, ctx_list=ctx, batch_axis=0, even_split=False)
+        outputs = None
+        for x in data:
+            output = model.forward(x)
+            outputs = output if outputs is None else nd.concat(outputs, output, axis=0)
         metric.update(targets, outputs)
         pixAcc, mIoU = metric.get()
         tbar.set_description( 'pixAcc: %.4f, mIoU: %.4f' % (pixAcc, mIoU))
@@ -108,29 +106,33 @@ def evaluate(model, input_shape, ctx, num_workers, dataset, logger):
     speed = size / (time.time() - tic)
     logger.info('Throughput is %f img/sec' % speed)
 
-def benchmark(model, input_shape, ctx, num_batches, logger):
+def benchmark(args, model, input_shape, ctx, num_batches, logger):
     bs = input_shape[0]
     size = num_batches * bs
     data = [mx.random.uniform(-1.0, 1.0, shape=input_shape, ctx=ctx[0], dtype='float32')]
-    batch = mx.io.DataBatch(data, [])
+    # batch = mx.io.DataBatch(data, [])
 
     # set profiler
-    profiler.set_config(profile_all=True,
-                        aggregate_stats=True,
-                        filename='profile.json')
+    if args.quantized:
+        filename = 'BS-' + str(bs) + '_int8_profile.json'
+    else:
+        filename = 'BS-' + str(bs) + '_fp32_no-fused_profile.json'
+    # profiler.set_config(profile_all=True,
+    #                     aggregate_stats=True,
+    #                     filename=filename)
 
     dry_run = 5
-    with tqdm(total=size) as pbar:
+    with tqdm(total=size+dry_run*bs) as pbar:
         for n in range(dry_run + num_batches):
             if n == dry_run:
                 # profiler.set_state('run')
                 tic = time.time()
-            outputs = model.forward(batch.data[0])
+            outputs = model.forward(data[0])
             for output in outputs:
                 output.wait_to_read()
             pbar.update(bs)
         # profiler.set_state('stop')
-    # print(profiler.dump_profile())
+    # profiler.dump()
     speed = size / (time.time() - tic)
     logger.info('Throughput is %f imgs/sec' % speed)
 
@@ -169,17 +171,21 @@ if __name__ == '__main__':
 
     model = mx.gluon.SymbolBlock.imports('{}-symbol.json'.format(model_prefix), ['data'], 
             '{}-0000.params'.format(model_prefix))
-    # if args.pretrained:
+    # if args.pretrained.lower() == '':
     #     model = get_model(model_prefix, pretrained=True)
     # else:
+    #     
     #     model = get_model(model_prefix, pretrained=False)
     #     model.load_parameters(model_prefix)
     logger.info("Successfully loaded %s model." % model_prefix)
     model.collect_params().reset_ctx(ctx = ctx)
-    model.hybridize()
+    if args.quantized:
+        model.hybridize(static_alloc=True, static_shape=True)
+    else:
+        model.hybridize()
 
     if not args.benchmark:
         evaluate(model, input_shape, ctx, args.num_workers, args.dataset, logger)
     else:
-        benchmark(model, input_shape, ctx, num_batches, logger)
+        benchmark(args, model, input_shape, ctx, num_batches, logger)
     logger.info('Evaluation on FCN model has been done!')

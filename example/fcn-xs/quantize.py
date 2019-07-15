@@ -60,7 +60,6 @@ def get_dataloader(calib_dataset, batch_size, num_workers):
     return val_loader
 
 
-
 def parse_args():
     """Training Options for Segmentation Experiments"""
     parser = argparse.ArgumentParser(description='MXNet Gluon \
@@ -126,19 +125,13 @@ if __name__ == '__main__':
     else:
         raise ValueError('%s dataset is not supported yet' % args.dataset)
 
-
     # get model from gluonCV.ModelZoo
     net = get_model(model_prefix, pretrained=True)
-    # net.hybridize()
-    # net(mx.nd.ones(shape=(1, 3, 224, 224)))
-    # net.export(model_prefix, 0)
-    gluoncv.utils.export_block(model_prefix, net, preprocess=False, layout='CHW')
-    # x = mx.sym.Variable('data')
-    # y = net(x)
-    # print(type(net))
+    net.hybridize()
+    net(mx.nd.ones(shape=(1, 3, args.crop_size, args.crop_size)))
+    net.export(model_prefix, 0)
+    # gluoncv.utils.export_block(model_prefix, net, preprocess=False, layout='CHW')
     logger.info('Successfully saved symbol and params into files')
-
-    # sys.exit()
 
     # get config
     batch_size = args.batch_size
@@ -185,11 +178,15 @@ if __name__ == '__main__':
                                                           logger=logger)
 
         if calib_mode == 'naive':
-            suffix = '_int8'
+            # suffix = '_int8'
+            suffix = '-quantized-%dbatches-%s' % (num_calib_batches, calib_mode)
         elif calib_mode == 'entropy':
-            suffix = '_int8'
+            # suffix = '_int8'
+            suffix = '-quantized-%dbatches-%s' % (num_calib_batches, calib_mode)
         sym_name = '%s-symbol.json' % (model_prefix + suffix)
     qsym = qsym.get_backend_symbol('MKLDNN_QUANTIZE')
+    # print(qsym.list_arguments())
+    # sys.exit()
     save_symbol(sym_name, qsym, logger=logger)
     params_name = '%s-%04d.params' % (model_prefix + suffix, 0)
     save_params(params_name, qarg_params, aux_params, logger=logger)

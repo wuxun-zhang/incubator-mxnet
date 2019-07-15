@@ -24,14 +24,14 @@ import argparse
 import logging
 
 import mxnet as mx
-from mxnet import gluon
+from mxnet import gluon, profiler
 from mxnet.gluon.data.vision import transforms
 
 import gluoncv
 from gluoncv.model_zoo.segbase import *
-from gluoncv.model_zoo import get_model
+# from gluoncv.model_zoo import get_model
 from gluoncv.data import get_segmentation_dataset
-from gluoncv.utils.viz import get_color_pallete
+# from gluoncv.utils.viz import get_color_pallete
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Evaluate FCN model')
@@ -53,12 +53,16 @@ def parse_args():
     parser.add_argument('--ngpus', type=int, default=0)
     parser.add_argument('--benchmark', action='store_true',
                         help='using dummy data to benchmark performance')
+    parser.add_argument('--data-path', default='',
+                        help='dataset path to be used')
 
     args = parser.parse_args()
     return args
-    
 
-def evaluate(net, bs, ctx, num_workers, dataset, logger):
+def get_data_rec(bs, num_workers, path_imgrec, path_imglst=""):
+    pass
+
+def evaluate(args, net, bs, ctx, num_workers, dataset, logger):
     input_transform = transforms.Compose([
         transforms.ToTensor(),
         transforms.Normalize([.485, .456, .406], [.229, .224, .225]),
@@ -75,9 +79,20 @@ def evaluate(net, bs, ctx, num_workers, dataset, logger):
     data = [mx.random.uniform(-1.0, 1.0, shape=shape, ctx=ctx[0], dtype='float32')
                 for _, shape in net.data_shapes]
     batch = mx.io.DataBatch(data, [])
+
+    # set profiler
+    if args.quantized:
+        filename = 'real_BS-' + str(bs) + '_int8_v0.20_profile_{}samples.json'.format(str(size))
+    else:
+        filename = 'real_BS-' + str(bs) + '_fp32_v100_profile_{}samples.json'.format(str(size))
+    # profiler.set_config(profile_all=True,
+    #                     aggregate_stats=True,
+    #                     filename=filename)
+    # profiler.set_state('run')
+
     for i in range(dry_run):
-        outputs = model.forward(batch.data[0])
-        for output in outputs:
+        net.forward(batch)
+        for output in net.get_outputs():
             output.wait_to_read()
 
     metric = gluoncv.utils.metrics.SegmentationMetric(testset.num_class)
@@ -85,7 +100,7 @@ def evaluate(net, bs, ctx, num_workers, dataset, logger):
     tbar = tqdm(test_data)
     tic = time.time()
     for i, (batch, dsts) in enumerate(tbar):
-        targets = mx.gluon.utils.split_and_load(dsts, ctx_list=ctx, even_split=False)
+        targets = gluon.utils.split_and_load(dsts, ctx_list=ctx, even_split=False)
         data = gluon.utils.split_and_load(batch, ctx_list=ctx, batch_axis=0, even_split=False)
         # data = batch.as_in_context(ctx[0])
         net.forward(mx.io.DataBatch(data), is_train=False)
@@ -93,23 +108,37 @@ def evaluate(net, bs, ctx, num_workers, dataset, logger):
         metric.update(targets, outputs)
         pixAcc, mIoU = metric.get()
         tbar.set_description( 'pixAcc: %.4f, mIoU: %.4f' % (pixAcc, mIoU))
+    # profiler.set_state('stop')
+    # profiler.dump()
     speed = size / (time.time() - tic)
     logger.info('Throughput is %f img/sec' % speed)
 
-def benchmark(net, input_shape, ctx, num_batches, batch_size, logger):
-    size = num_batches * batch_size
+def benchmark(args, net, input_shape, ctx, num_batches, bs, logger):
+    size = num_batches * bs
     data = [mx.random.uniform(-1.0, 1.0, shape=input_shape, ctx=ctx[0], dtype='float32')]
     batch = mx.io.DataBatch(data, [])
 
+    # set profiler
+    if args.quantized:
+        filename = 'dummy_BS-' + str(bs) + '_int8_v0.20_profile_{}samples.json'.format(str(size))
+    else:
+        filename = 'dummy_BS-' + str(bs) + '_fp32_v100_profile_{}samples.json'.format(str(size))
+    profiler.set_config(profile_all=True,
+                        aggregate_stats=True,
+                        filename=filename)
+
     dry_run = 5
-    with tqdm(total=size) as pbar:
+    with tqdm(total=size+dry_run*bs) as pbar:
         for n in range(dry_run + num_batches):
             if n == dry_run:
+                # profiler.set_state('run')
                 tic = time.time()
             mod.forward(batch, is_train=False)
             for output in mod.get_outputs():
                 output.wait_to_read()
             pbar.update(bs)
+        # profiler.set_state('stop')
+    # profiler.dump()
     speed = size / (time.time() - tic)
     logger.info('Throughput is %f imgs/sec' % speed)
 
@@ -131,7 +160,7 @@ if __name__ == '__main__':
     input_shape = (bs, CHANNEL_COUNT, image_shape, image_shape)
 
     if args.backbone not in ['resnet101', 'resnet50']:
-        raise ValueError('Unsupported base network {} for fcn'.format(args.backbone)) 
+        raise ValueError('Unsupported base network {} for fcn'.format(args.backbone))
 
     model_prefix = args.model + '_' + args.backbone
     if 'pascal' in args.dataset:
@@ -147,13 +176,14 @@ if __name__ == '__main__':
         model_prefix += '_int8'
 
     sym, arg_params, aux_params = mx.model.load_checkpoint(model_prefix, 0)
+    # sym = sym.get_backend_symbol('MKLDNN')
     logger.info('Successfully loaded %s symbol.' % (model_prefix))
-    mod = mx.module.Module(sym, data_names=('data',), label_names=None, fixed_param_names=sym.list_arguments())
+    mod = mx.module.Module(sym, data_names=('data',), label_names=None, fixed_param_names=sym.list_arguments(), context=ctx)
     mod.bind(data_shapes=[('data', input_shape)], for_training=False, grad_req=None)
     mod.set_params(arg_params, aux_params)
 
     if not args.benchmark:
-        evaluate(mod, bs, ctx, args.num_workers, args.dataset, logger)
+        evaluate(args, mod, bs, ctx, args.num_workers, args.dataset, logger)
     else:
-        benchmark(mod, input_shape, ctx, num_batches, bs, logger)
+        benchmark(args, mod, input_shape, ctx, num_batches, bs, logger)
     logger.info('Evaluation on FCN model has been done!')
