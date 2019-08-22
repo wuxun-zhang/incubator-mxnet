@@ -44,12 +44,14 @@ static void SoftmaxComputeExCPU(const nnvm::NodeAttrs& attrs,
   // It seems MKLDNN softmax doesn't support training.
   const SoftmaxParam& param = nnvm::get<SoftmaxParam>(attrs.parsed);
   if (SupportMKLDNNSoftmax(param, inputs[0], outputs[0])) {
+    LOG(INFO) << "Executing Mkl-DNN softmax pass...";
     MKLDNN_OPCHECK_INIT(false, outputs.size(), inputs, outputs);
     MKLDNNSoftmaxForward(attrs, ctx, inputs[0], req[0], outputs[0]);
     auto fn = SoftmaxCompute<cpu, mxnet_op::softmax_fwd>;
     MKLDNN_OPCHECK_RUN(fn, attrs, ctx, inputs, req, outputs);
     return;
   }
+  LOG(INFO) << "Falling back to naive softmax pass...";
   FallBackCompute(SoftmaxCompute<cpu, mxnet_op::softmax_fwd>, attrs, ctx,
                   inputs, req, outputs);
 }

@@ -101,11 +101,13 @@ void FullyConnectedComputeExCPU(const nnvm::NodeAttrs& attrs,
   if (common::ContainsOnlyStorage(inputs, kDefaultStorage) &&
       common::ContainsOnlyStorage(outputs, kDefaultStorage)) {
     if (SupportMKLDNNFC(inputs[0])) {
+      LOG(INFO) << "Executing MKL-DNN FC pass...";
       MKLDNN_OPCHECK_INIT(false, outputs.size(), inputs, outputs);
       MKLDNNFCForward(attrs, ctx, inputs, req, outputs);
       MKLDNN_OPCHECK_RUN(FullyConnectedCompute<cpu>, attrs, ctx, inputs, req,
                          outputs);
     } else {
+      LOG(INFO) << "Falling back to naive FC pass...";
       FallBackCompute(FullyConnectedCompute<cpu>, attrs, ctx, inputs, req, outputs);
     }
     return;
