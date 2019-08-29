@@ -59,29 +59,29 @@ def run_all_mxnet_operator_benchmarks(ctx=mx.cpu(), dtype='float32', profiler='n
     # *************************MXNET TENSOR OPERATOR BENCHMARKS*****************************
 
     # Run all Unary operations benchmarks with default input values
-    mxnet_operator_benchmark_results.append(run_mx_unary_operators_benchmarks(ctx=ctx, dtype=dtype, profiler=profiler))
+    #mxnet_operator_benchmark_results.append(run_mx_unary_operators_benchmarks(ctx=ctx, dtype=dtype, profiler=profiler))
 
     # Run all Binary Broadcast, element_wise operations benchmarks with default input values
-    mxnet_operator_benchmark_results.append(run_mx_binary_broadcast_operators_benchmarks(ctx=ctx,
-                                                                                         dtype=dtype, profiler=profiler))
-    mxnet_operator_benchmark_results.append(run_mx_binary_element_wise_operators_benchmarks(ctx=ctx,
-                                                                                            dtype=dtype, profiler=profiler))
+    #mxnet_operator_benchmark_results.append(run_mx_binary_broadcast_operators_benchmarks(ctx=ctx,
+    #                                                                                     dtype=dtype, profiler=profiler))
+    #mxnet_operator_benchmark_results.append(run_mx_binary_element_wise_operators_benchmarks(ctx=ctx,
+    #                                                                                        dtype=dtype, profiler=profiler))
 
     # Run all GEMM operations benchmarks with default input values
-    mxnet_operator_benchmark_results.append(run_gemm_operators_benchmarks(ctx=ctx,
-                                                                          dtype=dtype, profiler=profiler))
+    #mxnet_operator_benchmark_results.append(run_gemm_operators_benchmarks(ctx=ctx,
+    #                                                                      dtype=dtype, profiler=profiler))
 
     # Run all Random sampling operations benchmarks with default input values
-    mxnet_operator_benchmark_results.append(run_mx_random_sampling_operators_benchmarks(ctx=ctx, dtype=dtype, profiler=profiler))
+    #mxnet_operator_benchmark_results.append(run_mx_random_sampling_operators_benchmarks(ctx=ctx, dtype=dtype, profiler=profiler))
 
     # Run all Reduction operations benchmarks with default input values
-    mxnet_operator_benchmark_results.append(run_mx_reduction_operators_benchmarks(ctx=ctx, dtype=dtype, profiler=profiler))
+    #mxnet_operator_benchmark_results.append(run_mx_reduction_operators_benchmarks(ctx=ctx, dtype=dtype, profiler=profiler))
 
     # Run all Sorting and Searching operations benchmarks with default input values
-    mxnet_operator_benchmark_results.append(run_sorting_searching_operators_benchmarks(ctx=ctx, dtype=dtype, profiler=profiler))
+    #mxnet_operator_benchmark_results.append(run_sorting_searching_operators_benchmarks(ctx=ctx, dtype=dtype, profiler=profiler))
 
     # Run all Array Rearrange operations benchmarks with default input values
-    mxnet_operator_benchmark_results.append(run_rearrange_operators_benchmarks(ctx=ctx, dtype=dtype, profiler=profiler))
+    #mxnet_operator_benchmark_results.append(run_rearrange_operators_benchmarks(ctx=ctx, dtype=dtype, profiler=profiler))
 
     # ************************ MXNET NN OPERATOR BENCHMARKS ****************************
 
@@ -98,9 +98,9 @@ def run_all_mxnet_operator_benchmarks(ctx=mx.cpu(), dtype='float32', profiler='n
     mxnet_operator_benchmark_results.append(run_convolution_operators_benchmarks(ctx=ctx, dtype=dtype, profiler=profiler))
 
     # Run all Optimizer operations benchmarks with default input values
-    mxnet_operator_benchmark_results.append(run_optimizer_operators_benchmarks(ctx=ctx, dtype=dtype, profiler=profiler))
+    #mxnet_operator_benchmark_results.append(run_optimizer_operators_benchmarks(ctx=ctx, dtype=dtype, profiler=profiler))
     # Run all Transpose Convolution operations benchmarks with default input values
-    mxnet_operator_benchmark_results.append(run_transpose_convolution_operators_benchmarks(ctx=ctx, dtype=dtype, profiler=profiler))
+    #mxnet_operator_benchmark_results.append(run_transpose_convolution_operators_benchmarks(ctx=ctx, dtype=dtype, profiler=profiler))
 
     # ****************************** PREPARE FINAL RESULTS ********************************
     final_benchmark_result_map = merge_map_list(mxnet_operator_benchmark_results)
@@ -142,7 +142,8 @@ def main():
                         help='Use built-in CPP profiler (native) or Python'
                              'time module.'
                              'Valid Inputs - native, python')
-
+    parser.add_argument('--tensor-size-option',type=str, default='int32')
+    parser.add_argument('--mkldnn-option', type=str, default='mkldnn')
     args = parser.parse_args()
     logging.info("Running MXNet operator benchmarks with the following options: {args}".format(args=args))
     assert not os.path.isfile(args.output_file),\
@@ -154,6 +155,7 @@ def main():
     profiler = args.profiler
     final_benchmark_results = run_all_mxnet_operator_benchmarks(ctx=ctx, dtype=dtype, profiler=profiler)
 
+    args.output_file = './logs/' + args.tensor_size_option + '_' + args.mkldnn_option + '/mxnet_operator_benchmarks.json'
     # 3. PREPARE OUTPUTS
     run_time_features = get_current_runtime_features()
     save_to_file(final_benchmark_results, args.output_file, args.output_format, run_time_features, profiler)
