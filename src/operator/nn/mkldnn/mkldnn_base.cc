@@ -240,11 +240,13 @@ const mkldnn::memory *GetWeights(const NDArray &arr, int num_groups) {
   auto tz = mkldnn::memory::dims{0};
   auto format_tag = mkldnn::memory::format_tag::undef;
   auto engine = CpuEngine::Get()->get_engine();
-  const int O = 0, I = 1, H = 2, W = 3;
+  const int ndim = arr.shape().ndim();
+  const int D = (ndim == 5) ? 2 : 1;
+  const int O = 0, I = 1, H = D + 1, W = D + 2;
   if (arr.shape().ndim() == 2) {
     tz = mkldnn::memory::dims{static_cast<int>(arr.shape()[O]), static_cast<int>(arr.shape()[I])};
     format_tag = mkldnn::memory::format_tag::oi;
-  } else if (arr.shape().ndim() == 3) {
+  } else if (ndim == 3) {
     tz = num_groups > 1
              ? mkldnn::memory::dims{num_groups, static_cast<int>(arr.shape()[O] / num_groups),
                                     static_cast<int>(arr.shape()[I]),
@@ -254,7 +256,7 @@ const mkldnn::memory *GetWeights(const NDArray &arr, int num_groups) {
                                     static_cast<int>(arr.shape()[H])};
     format_tag = num_groups > 1 ? mkldnn::memory::format_tag::goiw
                                 : mkldnn::memory::format_tag::oiw;
-  } else if (arr.shape().ndim() == 4) {
+  } else if (ndim == 4) {
     tz = num_groups > 1
              ? mkldnn::memory::dims{num_groups, static_cast<int>(arr.shape()[O] / num_groups),
                                     static_cast<int>(arr.shape()[I]),
@@ -265,6 +267,19 @@ const mkldnn::memory *GetWeights(const NDArray &arr, int num_groups) {
                    static_cast<int>(arr.shape()[H]), static_cast<int>(arr.shape()[W])};
     format_tag = num_groups > 1 ? mkldnn::memory::format_tag::goihw
                                 : mkldnn::memory::format_tag::oihw;
+  } else if (ndim == 5) {
+    tz = num_groups > 1
+             ? mkldnn::memory::dims{num_groups, static_cast<int>(arr.shape()[O] / num_groups),
+                                    static_cast<int>(arr.shape()[I]),
+                                    static_cast<int>(arr.shape()[D]),
+                                    static_cast<int>(arr.shape()[H]),
+                                    static_cast<int>(arr.shape()[W])}
+             : mkldnn::memory::dims{
+                   static_cast<int>(arr.shape()[O]), static_cast<int>(arr.shape()[I]),
+                   static_cast<int>(arr.shape()[D]), static_cast<int>(arr.shape()[H]),
+                   static_cast<int>(arr.shape()[W])};
+    format_tag = num_groups > 1 ? mkldnn::memory::format_tag::goidhw
+                                : mkldnn::memory::format_tag::oidhw;
   } else {
     LOG(FATAL) << "The weight array has an unsupported number of dimensions";
   }
