@@ -55,10 +55,9 @@ bool QuantizedConvShape(const nnvm::NodeAttrs& attrs,
 
 #if MXNET_USE_MKLDNN==1
   CHECK(kernel_ndims == 1 || kernel_ndims == 2 || kernel_ndims == 3)
-        << "mkldnn quantized_conv supports 1d or 2d or 3d convolution for now";
-  LOG(INFO) << "check param.dilate ...";
+        << "mkldnn quantized_conv only supports 1d or 2d or 3d kernel for now";
   CHECK(data_ndims == 3U || data_ndims == 4U || data_ndims == 5U)
-        << "mkldnn quantized_conv supports 1d or 2d or 3d convolution for now";
+        << "mkldnn quantized_conv only supports 3d or 4d or 5d layout for now";
 #else
   CHECK_EQ(kernel_ndims, 2U) << "quantized_conv only supports 2D convolution for now";
   CHECK(param.dilate.ndim() == 0U || param.dilate.Size() == 1U)
@@ -104,15 +103,11 @@ bool QuantizedConvShape(const nnvm::NodeAttrs& attrs,
     mxnet::TShape oshape{1, 1, 1, 1};
     oshape[N] = dshape[N];
     oshape[C] = wshape[N];
-#if MXNET_USE_MKLDNN==1
+
     const index_t dilated_ksize_y = param.DilatedKernelSize(0);
     const index_t dilated_ksize_x = param.DilatedKernelSize(1);
     oshape[H] = (AddPad(dshape[H], param.pad[0]) - dilated_ksize_y) / param.stride[0] + 1;
     oshape[W] = (AddPad(dshape[W], param.pad[1]) - dilated_ksize_x) / param.stride[1] + 1;
-#else
-    oshape[H] = (AddPad(dshape[H], param.pad[0]) - wshape[H]) / param.stride[0] + 1;
-    oshape[W] = (AddPad(dshape[W], param.pad[1]) - wshape[W]) / param.stride[1] + 1;
-#endif
 
     SHAPE_ASSIGN_CHECK(*out_shape, 0, oshape);
     SHAPE_ASSIGN_CHECK(*out_shape, 1, mxnet::TShape(1, 1));
@@ -143,12 +138,6 @@ bool QuantizedConvShape(const nnvm::NodeAttrs& attrs,
     SHAPE_ASSIGN_CHECK(*out_shape, 2, mxnet::TShape(1, 1));
   }
 
-  // mxnet::TShape wshape{0, 0, 0, 0};
-  // wshape[N] = param.num_filter;
-  // wshape[H] = param.kernel[0];
-  // wshape[W] = param.kernel[1];
-  // wshape[C] = dshape[C];
-  // SHAPE_ASSIGN_CHECK(*in_shape, 1, wshape);
   const int start = param.no_bias? 2 : 3;
   const int end = param.no_bias? 6 : 9;
   for (int i = start; i < end; ++i) {
@@ -158,16 +147,6 @@ bool QuantizedConvShape(const nnvm::NodeAttrs& attrs,
     SHAPE_ASSIGN_CHECK(*in_shape, 2, Shape1(param.num_filter));
   }
 
-
-  // mxnet::TShape oshape{1, 1, 1, 1};
-  // oshape[N] = dshape[N];
-  // oshape[C] = wshape[N];
-  // oshape[H] = (AddPad(dshape[H], param.pad[0]) - wshape[H]) / param.stride[0] + 1;
-  // oshape[W] = (AddPad(dshape[W], param.pad[1]) - wshape[W]) / param.stride[1] + 1;
-
-  // SHAPE_ASSIGN_CHECK(*out_shape, 0, oshape);
-  // SHAPE_ASSIGN_CHECK(*out_shape, 1, mxnet::TShape(1, 1));
-  // SHAPE_ASSIGN_CHECK(*out_shape, 2, mxnet::TShape(1, 1));
   return true;
 }
 

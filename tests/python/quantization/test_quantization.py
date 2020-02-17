@@ -196,7 +196,7 @@ def test_requantize_int32_to_int8():
 
 @with_seed()
 def test_quantized_conv():
-    def check_quantized_conv(data_shape, kernel, num_filter, pad, stride, no_bias, qdtype):
+    def check_quantized_conv(data_shape, kernel, num_filter, pad, stride, dilate, no_bias, qdtype):
         if is_test_for_native_cpu():
             print('skipped testing quantized_conv for native cpu since it is not supported yet')
             return
@@ -211,7 +211,7 @@ def test_quantized_conv():
         # run fp32 conv
         data = mx.sym.Variable(name='data', shape=data_shape, dtype='float32')
         conv = mx.sym.Convolution(data=data, kernel=kernel, num_filter=num_filter, pad=pad, stride=stride,
-                                  no_bias=no_bias, cudnn_off=False, name='conv')
+                                  dilate=dilate, no_bias=no_bias, cudnn_off=False, name='conv')
         arg_shapes, _, _ = conv.infer_shape(data=data_shape)
         arg_names = conv.list_arguments()
         conv_exe_fp32 = conv.simple_bind(ctx=mx.current_context(), grad_req='null')
@@ -241,7 +241,7 @@ def test_quantized_conv():
                                                        max_data=max_data, min_weight=min_weight,
                                                        max_weight=max_weight, kernel=kernel,
                                                        num_filter=num_filter, pad=pad, stride=stride,
-                                                       no_bias=no_bias)
+                                                       dilate=dilate, no_bias=no_bias)
         qarg_names = quantized_conv.list_arguments()
         type_dict = None
         if not no_bias:
@@ -274,10 +274,14 @@ def test_quantized_conv():
             assert cond == 0
 
     for qdtype in ['int8', 'uint8']:
-        check_quantized_conv((3, 4, 28, 28), (3, 3), 128, (1, 1), (1, 1), True, qdtype)
-        check_quantized_conv((3, 4, 28, 28), (3, 3), 128, (1, 1), (1, 1), False, qdtype)
-        check_quantized_conv((1, 3, 4, 28, 28), (1, 3, 3), 128, (1, 1, 1), (1, 1, 1), False, qdtype)
-        check_quantized_conv((1, 3, 4, 28, 28), (1, 3, 3), 128, (1, 1, 1), (1, 1, 1), True, qdtype)
+        check_quantized_conv((3, 4, 28, 28), (3, 3), 128, (1, 1), (1, 1), (1, 1), True, qdtype)
+        check_quantized_conv((3, 4, 28, 28), (3, 3), 128, (1, 1), (1, 1), (1, 1), False, qdtype)
+        check_quantized_conv((3, 4, 28, 28), (3, 3), 128, (1, 1), (1, 1), (2, 2), True, qdtype)
+        check_quantized_conv((3, 4, 28, 28), (3, 3), 128, (1, 1), (1, 1), (2, 2), False, qdtype)
+        check_quantized_conv((1, 3, 4, 28, 28), (1, 3, 3), 128, (1, 1, 1), (1, 1, 1), (1, 1, 1), False, qdtype)
+        check_quantized_conv((1, 3, 4, 28, 28), (1, 3, 3), 128, (1, 1, 1), (1, 1, 1), (1, 1, 1), True, qdtype)
+        check_quantized_conv((1, 3, 4, 28, 28), (1, 3, 3), 128, (1, 1, 1), (1, 1, 1), (2, 2, 2), False, qdtype)
+        check_quantized_conv((1, 3, 4, 28, 28), (1, 3, 3), 128, (1, 1, 1), (1, 1, 1), (2, 2, 2), True, qdtype)
 
 
 @with_seed()
