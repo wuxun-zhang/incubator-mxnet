@@ -59,6 +59,9 @@ std::vector<float> SmoothDistribution(const std::vector<float>& p, const float e
   auto ret = p;
   for (size_t i = 0; i < p.size(); i++) {
     ret[i] += eps * is_zeros[i] - eps1 * is_nonzeros[i];
+    // check if ret[i] is larger than 0, otherwise invalid distribution
+    if (ret[i] <= 0)
+      return std::vector<float>();
   }
   return ret;
 }
