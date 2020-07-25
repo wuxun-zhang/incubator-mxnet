@@ -102,6 +102,15 @@ static inline bool IsMKLDNNData(const std::vector<NDArray> &arrs) {
   }
   return true;
 }
+
+static inline bool IsOneOfMKLDNNData(const std::vector<NDArray> &arrs) {
+  for (auto &arr : arrs) {
+    if (arr.IsMKLDNNData())
+      return true;
+  }
+  return false;
+}
+
 #endif
 
 void ElementWiseSumComputeExCPU(const nnvm::NodeAttrs& attrs,
@@ -122,8 +131,28 @@ void ElementWiseSumComputeExCPU(const nnvm::NodeAttrs& attrs,
     Resource rsc = ResourceManager::Get()->Request(ctx.run_ctx.get_ctx(),
         ResourceRequest(ResourceRequest::kTempSpace));
     NDArray out_nd = outputs[0];
-    mxnet::ndarray::ElementwiseSum<cpu>(s, rsc, inputs, &out_nd);
+
 #if MXNET_USE_MKLDNN == 1
+    if (IsOneOfMKLDNNData(inputs)) {
+      std::vector<NDArray> default_inputs;
+      default_inputs.reserve(inputs.size());
+      for (const auto &in : inputs) {
+        if (in.IsMKLDNNData()) {
+          default_inputs.push_back(in.Reorder2Default());
+        } else {
+          default_inputs.push_back(in);
+        }
+      }
+
+      if (out_nd.IsMKLDNNData())
+        out_nd = out_nd.Reorder2Default();
+
+        mxnet::ndarray::ElementwiseSum<cpu>(s, rsc, default_inputs, &out_nd);
+      }  else {
+#endif
+      mxnet::ndarray::ElementwiseSum<cpu>(s, rsc, inputs, &out_nd);
+#if MXNET_USE_MKLDNN == 1
+    }
   } else if (IsMKLDNNData(inputs)) {
     MKLDNNRun(MKLDNNSumForward, attrs, ctx, inputs, req, outputs);
   } else if (common::ContainsOnlyStorage(inputs, kDefaultStorage)) {
